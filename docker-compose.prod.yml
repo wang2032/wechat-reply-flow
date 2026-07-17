@@ -1,0 +1,13 @@
+services:
+  bot:
+    build: .
+    container_name: wechat-reply-flow
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      WECHAT_PATH: /wechat
+    ports:
+      - "38181:3000"
+    restart: unless-stopped
