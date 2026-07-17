@@ -6,6 +6,7 @@
 - `POST` 文本消息自动回复
 - 基于 `openid` 的轻量会话状态
 - 收到消息自动同步到 PostgreSQL
+- `/start` 开启 AI 智能对话，`/stop` 结束
 
 ## 目录结构
 
@@ -17,6 +18,8 @@ src/
     health.controller.js
     wechat.controller.js
   services/
+    ai-chat.service.js
+    conversation.service.js
     reply.service.js
     signature.service.js
     user-sync.service.js
@@ -55,6 +58,14 @@ https://wechat.10rig.com/wechat
 
 如果走 Docker，`docker compose` 会同时启动 Postgres；如果直接 `npm start`，要先保证 `DATABASE_URL` 指向可用的 PostgreSQL。
 
+AI 对话是可选的，配置这些变量后才会启用：
+
+- `AI_API_KEY`
+- `AI_BASE_URL`
+- `AI_MODEL`
+- `AI_TEMPERATURE`
+- `AI_SYSTEM_PROMPT`
+
 ## Docker 部署
 
 先复制环境文件：
@@ -91,11 +102,15 @@ curl http://127.0.0.1:38181/api/users/o1Qug2BMeaZ6jJDbhCCczgwzlrxE
 
 ## 当前逻辑
 
-- 用户发 `菜单`：返回可选操作
-- 用户发 `1`：进入留名流程
-- 用户发 `2`：进入提问流程
-- 用户发普通文本：默认回显
-- 关注事件：返回欢迎语
+- 用户关注：主动发送主菜单
+- 用户发 `菜单`：返回主菜单
+- 用户发 `1`：进入小工具业务
+- 用户发 `2`：进入免费 token 福利业务
+- 用户发 `3`：进入项目部署教程业务
+- 用户发 `4`：进入工具投稿 / 推广合作业务
+- 用户发 `5`：进入 AI 定制开发 / 私有部署业务
+- 发 `/start`：切到 AI 对话模式
+- 发 `/stop`：退出 AI 对话模式
 
 ## 说明
 

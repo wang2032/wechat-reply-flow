@@ -12,6 +12,8 @@ const USER_TABLE_SQL = `
     latest_content TEXT,
     latest_raw_xml TEXT NOT NULL,
     message_count INTEGER NOT NULL DEFAULT 0,
+    ai_mode_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    ai_mode_updated_at TIMESTAMPTZ,
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -23,6 +25,7 @@ const MESSAGE_TABLE_SQL = `
     id BIGSERIAL PRIMARY KEY,
     openid TEXT NOT NULL,
     to_user_name TEXT NOT NULL,
+    direction TEXT NOT NULL DEFAULT 'in',
     msg_type TEXT,
     event_name TEXT,
     event_key TEXT,
@@ -42,6 +45,11 @@ const MESSAGE_INDEX_SQL = `
   ON wechat_messages (openid, created_at DESC);
 `;
 
+const MESSAGE_DIRECTION_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS wechat_messages_openid_direction_created_at_idx
+  ON wechat_messages (openid, direction, created_at DESC);
+`;
+
 export function createPostgresStore(databaseUrl) {
   const pool = new Pool({
     connectionString: databaseUrl,
@@ -55,8 +63,18 @@ export function createPostgresStore(databaseUrl) {
       initPromise = (async () => {
         await pool.query(USER_TABLE_SQL);
         await pool.query(MESSAGE_TABLE_SQL);
+        await pool.query(
+          "ALTER TABLE wechat_users ADD COLUMN IF NOT EXISTS ai_mode_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+        );
+        await pool.query(
+          "ALTER TABLE wechat_users ADD COLUMN IF NOT EXISTS ai_mode_updated_at TIMESTAMPTZ",
+        );
+        await pool.query(
+          "ALTER TABLE wechat_messages ADD COLUMN IF NOT EXISTS direction TEXT NOT NULL DEFAULT 'in'",
+        );
         await pool.query(USER_INDEX_SQL);
         await pool.query(MESSAGE_INDEX_SQL);
+        await pool.query(MESSAGE_DIRECTION_INDEX_SQL);
       })();
     }
     return initPromise;
@@ -74,12 +92,13 @@ export function createPostgresStore(databaseUrl) {
         INSERT INTO wechat_messages (
           openid,
           to_user_name,
+          direction,
           msg_type,
           event_name,
           event_key,
           content,
           raw_xml
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ) VALUES ($1, $2, 'in', $3, $4, $5, $6, $7)
         RETURNING id, created_at
         `,
         [
@@ -167,6 +186,73 @@ export function createPostgresStore(databaseUrl) {
     return result.rows[0] ?? null;
   }
 
+  async function setAiMode(openid, enabled, toUserName = "unknown") {
+    await ensureInitialized();
+    const result = await pool.query(
+      `
+      INSERT INTO wechat_users (
+        openid,
+        to_user_name,
+        latest_raw_xml,
+        ai_mode_enabled,
+        ai_mode_updated_at,
+        first_seen_at,
+        last_seen_at,
+        updated_at
+      ) VALUES ($1, $2, '', $3, NOW(), NOW(), NOW(), NOW())
+      ON CONFLICT (openid) DO UPDATE SET
+        ai_mode_enabled = EXCLUDED.ai_mode_enabled,
+        ai_mode_updated_at = NOW(),
+        updated_at = NOW()
+      RETURNING *
+      `,
+      [openid, toUserName, enabled],
+    );
+    return result.rows[0];
+  }
+
+  async function recordOutgoingMessage(message) {
+    await ensureInitialized();
+    const result = await pool.query(
+      `
+      INSERT INTO wechat_messages (
+        openid,
+        to_user_name,
+        direction,
+        msg_type,
+        event_name,
+        event_key,
+        content,
+        raw_xml
+      ) VALUES ($1, $2, 'out', $3, NULL, NULL, $4, $5)
+      RETURNING id, created_at
+      `,
+      [
+        message.openid,
+        message.toUserName,
+        message.msgType || "text",
+        message.content || null,
+        message.rawXml,
+      ],
+    );
+    return result.rows[0];
+  }
+
+  async function getRecentConversation(openid, limit = 12) {
+    await ensureInitialized();
+    const result = await pool.query(
+      `
+      SELECT direction, msg_type, event_name, event_key, content, created_at
+      FROM wechat_messages
+      WHERE openid = $1
+      ORDER BY created_at DESC
+      LIMIT $2
+      `,
+      [openid, limit],
+    );
+    return result.rows.reverse();
+  }
+
   async function close() {
     await pool.end();
   }
@@ -174,8 +260,11 @@ export function createPostgresStore(databaseUrl) {
   return {
     ensureInitialized,
     recordIncomingMessage,
+    recordOutgoingMessage,
     listUsers,
     getUser,
+    setAiMode,
+    getRecentConversation,
     close,
   };
 }

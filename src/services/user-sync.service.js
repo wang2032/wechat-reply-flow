@@ -11,5 +11,19 @@ export function createWechatUserSyncService(store) {
         rawXml,
       });
     },
+
+    async syncOutgoingMessage(message, replyText, replyXml) {
+      return store.recordOutgoingMessage({
+        openid: message.fromUserName || "anonymous",
+        toUserName: message.toUserName || "unknown",
+        msgType: "text",
+        content: replyText,
+        rawXml: replyXml,
+      });
+    },
+
+    async setAiMode(openid, enabled, toUserName) {
+      return store.setAiMode(openid, enabled, toUserName);
+    },
   };
 }

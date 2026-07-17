@@ -3,6 +3,8 @@ import { loadEnvConfig } from "./config/env.js";
 import { handleHealth } from "./controllers/health.controller.js";
 import { createWechatController } from "./controllers/wechat.controller.js";
 import { createUserController } from "./controllers/user.controller.js";
+import { createAiChatService } from "./services/ai-chat.service.js";
+import { createConversationService } from "./services/conversation.service.js";
 import { createPostgresStore } from "./storage/postgres.js";
 import { createWechatUserSyncService } from "./services/user-sync.service.js";
 import { createWechatSignatureVerifier } from "./services/signature.service.js";
@@ -13,11 +15,24 @@ export async function startServer() {
   const userStore = createPostgresStore(config.databaseUrl);
   await userStore.ensureInitialized();
   const userSyncService = createWechatUserSyncService(userStore);
+  const aiChatService = createAiChatService({
+    apiKey: config.aiApiKey,
+    baseUrl: config.aiBaseUrl,
+    model: config.aiModel,
+    temperature: config.aiTemperature,
+    systemPrompt: config.aiSystemPrompt,
+    userStore,
+  });
+  const conversationService = createConversationService({
+    userStore,
+    aiChatService,
+  });
   const verifySignature = createWechatSignatureVerifier(config.token);
   const handleWechatRequest = createWechatController({
     path: config.path,
     verifySignature,
     userSyncService,
+    conversationService,
   });
   const handleUserRequest = createUserController({ userStore });
 

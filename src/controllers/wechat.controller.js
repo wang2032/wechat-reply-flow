@@ -1,5 +1,4 @@
 import { buildEmptyReply, buildTextReply, parseWechatMessage } from "../utils/xml.js";
-import { handleIncomingMessage } from "../services/reply.service.js";
 import { logError, logInfo, logWarn, truncate } from "../utils/logger.js";
 
 function readRequestBody(req) {
@@ -25,7 +24,12 @@ function xmlResponse(res, statusCode, body) {
   res.end(body);
 }
 
-export function createWechatController({ path, verifySignature, userSyncService }) {
+export function createWechatController({
+  path,
+  verifySignature,
+  userSyncService,
+  conversationService,
+}) {
   return async function handleWechatRequest(req, res, url) {
     if (url.pathname !== path) {
       return false;
@@ -77,7 +81,7 @@ export function createWechatController({ path, verifySignature, userSyncService 
       if (userSyncService) {
         await userSyncService.syncIncomingMessage(incoming, body);
       }
-      const replyText = handleIncomingMessage(incoming);
+      const replyText = await conversationService.handleIncomingMessage(incoming);
 
       logInfo("wechat.callback.message_in", {
         requestId,
@@ -122,6 +126,10 @@ export function createWechatController({ path, verifySignature, userSyncService 
               fromUserName: incoming.toUserName,
               content: replyText,
             });
+
+      if (userSyncService && replyText !== "ok") {
+        await userSyncService.syncOutgoingMessage(incoming, replyText, reply);
+      }
 
       logInfo("wechat.callback.message_out", {
         requestId,
