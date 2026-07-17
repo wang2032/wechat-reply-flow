@@ -9,6 +9,7 @@ ENV WECHAT_PATH=/wechat
 
 COPY package.json ./package.json
 COPY server.js ./server.js
+COPY src ./src
 COPY README.md ./README.md
 
 EXPOSE 3000
