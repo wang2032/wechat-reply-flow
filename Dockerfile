@@ -8,6 +8,10 @@ ENV HOST=0.0.0.0
 ENV WECHAT_PATH=/wechat
 
 COPY package.json ./package.json
+COPY package-lock.json ./package-lock.json
+
+RUN npm ci --omit=dev
+
 COPY server.js ./server.js
 COPY src ./src
 COPY README.md ./README.md

@@ -25,7 +25,7 @@ function xmlResponse(res, statusCode, body) {
   res.end(body);
 }
 
-export function createWechatController({ path, verifySignature }) {
+export function createWechatController({ path, verifySignature, userSyncService }) {
   return async function handleWechatRequest(req, res, url) {
     if (url.pathname !== path) {
       return false;
@@ -74,6 +74,9 @@ export function createWechatController({ path, verifySignature }) {
     try {
       const body = await readRequestBody(req);
       const incoming = parseWechatMessage(body);
+      if (userSyncService) {
+        await userSyncService.syncIncomingMessage(incoming, body);
+      }
       const replyText = handleIncomingMessage(incoming);
 
       logInfo("wechat.callback.message_in", {

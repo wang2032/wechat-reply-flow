@@ -5,6 +5,7 @@
 - `GET` 服务器校验
 - `POST` 文本消息自动回复
 - 基于 `openid` 的轻量会话状态
+- 收到消息自动同步到 PostgreSQL
 
 ## 目录结构
 
@@ -18,10 +19,13 @@ src/
   services/
     reply.service.js
     signature.service.js
+    user-sync.service.js
   storage/
+    postgres.js
     session.store.js
   utils/
     xml.js
+    logger.js
 ```
 
 ## 运行
@@ -47,6 +51,10 @@ https://wechat.10rig.com/wechat
 
 参数 `Token` 要和环境变量 `WECHAT_TOKEN` 一致。
 
+服务还需要 `DATABASE_URL`，用于把收到的消息同步到 PostgreSQL。
+
+如果走 Docker，`docker compose` 会同时启动 Postgres；如果直接 `npm start`，要先保证 `DATABASE_URL` 指向可用的 PostgreSQL。
+
 ## Docker 部署
 
 先复制环境文件：
@@ -68,6 +76,18 @@ docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 你需要把 `wechat.10rig.com` 解析到服务器公网 IP，然后让 Nginx 反代到 `127.0.0.1:38181`。
+
+数据库里会保存：
+- 每条原始消息
+- 每个 `openid` 的最新状态
+- 消息次数和最后一次消息内容
+
+查询最近用户：
+
+```bash
+curl http://127.0.0.1:38181/api/users
+curl http://127.0.0.1:38181/api/users/o1Qug2BMeaZ6jJDbhCCczgwzlrxE
+```
 
 ## 当前逻辑
 
